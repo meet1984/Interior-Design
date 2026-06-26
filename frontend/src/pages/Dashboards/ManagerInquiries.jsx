@@ -1,7 +1,40 @@
 import React, { useState, useEffect, useContext } from 'react';
 import API from '../../services/api';
-import { Mail, Phone, Calendar, ClipboardList, CheckSquare } from 'lucide-react';
+import { Mail, Phone, Calendar, ClipboardList } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
+
+// Shared studio tokens — same set used in ManagerDashboard.
+// (Worth promoting to a shared module once a third file needs them.)
+const palette = {
+  red: '#C1121F',
+  deepRed: '#9B0F18',
+  navy: '#34495E',
+  sage: '#8D9A84',
+  stone: '#F2EFEA',
+  border: '#E5E5E5',
+  textPrimary: '#111111',
+  textSecondary: '#666666',
+  textMuted: '#888888',
+  charcoal: '#1C1A17',
+};
+
+const STATUS_CONFIG = {
+  pending: { color: palette.deepRed, bg: '#FBEAEA', label: 'Pending' },
+  in_discussion: { color: palette.navy, bg: '#EAEEF1', label: 'In Discussion' },
+  resolved: { color: palette.sage, bg: '#F1F4EF', label: 'Resolved' },
+  closed: { color: palette.textMuted, bg: palette.stone, label: 'Closed' },
+};
+
+const getStatusConfig = (status) =>
+  STATUS_CONFIG[status] || { color: palette.textMuted, bg: palette.stone, label: status || 'Unknown' };
+
+const FILTERS = [
+  { key: 'all', label: 'Total Requests' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'in_discussion', label: 'In Discussion' },
+  { key: 'resolved', label: 'Resolved' },
+  { key: 'closed', label: 'Closed' },
+];
 
 export const ManagerInquiries = () => {
   const { user } = useContext(AuthContext);
@@ -58,187 +91,252 @@ export const ManagerInquiries = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-[#C8A97E] border-t-transparent border-solid rounded-full animate-spin"></div>
+      <div className="min-h-[400px] flex items-center justify-center" role="status" aria-busy="true">
+        <div
+          className="w-9 h-9 border-2 border-t-transparent border-solid rounded-full animate-spin"
+          style={{ borderColor: `${palette.red}26`, borderTopColor: palette.red }}
+        />
+        <span className="sr-only">Loading inquiries…</span>
       </div>
     );
   }
 
-  // Analytics Calculations
-  const totalCount = inquiries.length;
-  const pendingCount = inquiries.filter(i => i.status === 'pending').length;
-  const inDiscussionCount = inquiries.filter(i => i.status === 'in_discussion').length;
-  const resolvedCount = inquiries.filter(i => i.status === 'resolved').length;
-  const closedCount = inquiries.filter(i => i.status === 'closed').length;
+  // Analytics calculations
+  const counts = {
+    all: inquiries.length,
+    pending: inquiries.filter((i) => i.status === 'pending').length,
+    in_discussion: inquiries.filter((i) => i.status === 'in_discussion').length,
+    resolved: inquiries.filter((i) => i.status === 'resolved').length,
+    closed: inquiries.filter((i) => i.status === 'closed').length,
+  };
 
-  const filteredInquiries = activeFilter === 'all' 
-    ? inquiries 
-    : inquiries.filter(i => i.status === activeFilter);
+  const filteredInquiries =
+    activeFilter === 'all' ? inquiries : inquiries.filter((i) => i.status === activeFilter);
 
   return (
-    <div className="space-y-6 font-display">
-      <div>
-        <h2 className="text-2xl font-light uppercase tracking-widest text-slate-800">Showroom Inbox Queue</h2>
-        <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Review quotations and design request consultations</p>
+    <div className="space-y-10 font-display">
+      {/* Header */}
+      <div className="space-y-2 pb-8" style={{ borderBottom: `1px solid ${palette.border}` }}>
+        <p
+          className="text-[10px] uppercase tracking-[0.2em] font-sans font-semibold"
+          style={{ color: palette.red }}
+        >
+          Showroom Inbox
+        </p>
+        <h2 className="text-3xl font-light tracking-tight" style={{ color: palette.textPrimary }}>
+          Queue
+        </h2>
+        <p className="text-sm font-sans" style={{ color: palette.textSecondary }}>
+          Review quotations and design request consultations.
+        </p>
       </div>
 
-      {/* Analytics Summary Panel as Filters */}
+      {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <button 
-          onClick={() => setActiveFilter('all')}
-          className={`p-4 flex flex-col items-center justify-center shadow-sm border transition-colors ${
-            activeFilter === 'all' ? 'bg-slate-800 border-slate-800' : 'bg-white border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <span className={`text-3xl font-light ${activeFilter === 'all' ? 'text-white' : 'text-slate-800'}`}>{totalCount}</span>
-          <span className={`text-[9px] uppercase tracking-widest font-semibold mt-1 ${activeFilter === 'all' ? 'text-slate-300' : 'text-slate-400'}`}>Total Requests</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveFilter('pending')}
-          className={`p-4 flex flex-col items-center justify-center shadow-sm border transition-colors ${
-            activeFilter === 'pending' ? 'bg-amber-500 border-amber-500' : 'bg-white border-amber-200 hover:bg-amber-50'
-          }`}
-        >
-          <span className={`text-3xl font-light ${activeFilter === 'pending' ? 'text-white' : 'text-amber-600'}`}>{pendingCount}</span>
-          <span className={`text-[9px] uppercase tracking-widest font-semibold mt-1 ${activeFilter === 'pending' ? 'text-amber-100' : 'text-amber-600'}`}>Pending</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveFilter('in_discussion')}
-          className={`p-4 flex flex-col items-center justify-center shadow-sm border transition-colors ${
-            activeFilter === 'in_discussion' ? 'bg-blue-500 border-blue-500' : 'bg-white border-blue-200 hover:bg-blue-50'
-          }`}
-        >
-          <span className={`text-3xl font-light ${activeFilter === 'in_discussion' ? 'text-white' : 'text-blue-600'}`}>{inDiscussionCount}</span>
-          <span className={`text-[9px] uppercase tracking-widest font-semibold mt-1 ${activeFilter === 'in_discussion' ? 'text-blue-100' : 'text-blue-600'}`}>In Discussion</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveFilter('resolved')}
-          className={`p-4 flex flex-col items-center justify-center shadow-sm border transition-colors ${
-            activeFilter === 'resolved' ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-emerald-200 hover:bg-emerald-50'
-          }`}
-        >
-          <span className={`text-3xl font-light ${activeFilter === 'resolved' ? 'text-white' : 'text-emerald-600'}`}>{resolvedCount}</span>
-          <span className={`text-[9px] uppercase tracking-widest font-semibold mt-1 ${activeFilter === 'resolved' ? 'text-emerald-100' : 'text-emerald-600'}`}>Resolved</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveFilter('closed')}
-          className={`p-4 flex flex-col items-center justify-center shadow-sm border transition-colors ${
-            activeFilter === 'closed' ? 'bg-slate-500 border-slate-500' : 'bg-white border-slate-300 hover:bg-slate-100'
-          }`}
-        >
-          <span className={`text-3xl font-light ${activeFilter === 'closed' ? 'text-white' : 'text-slate-600'}`}>{closedCount}</span>
-          <span className={`text-[9px] uppercase tracking-widest font-semibold mt-1 ${activeFilter === 'closed' ? 'text-slate-200' : 'text-slate-500'}`}>Closed</span>
-        </button>
+        {FILTERS.map(({ key, label }) => {
+          const isActive = activeFilter === key;
+          const accent = key === 'all' ? palette.charcoal : getStatusConfig(key).color;
+          return (
+            <button
+              key={key}
+              onClick={() => setActiveFilter(key)}
+              aria-pressed={isActive}
+              className="p-5 flex flex-col items-center justify-center transition-all duration-300 font-sans"
+              style={{
+                border: `1px solid ${isActive ? accent : palette.border}`,
+                backgroundColor: isActive ? accent : '#FFFFFF',
+                boxShadow: '0 1px 2px rgba(17,17,17,0.03)',
+              }}
+            >
+              <span
+                className="text-3xl font-light"
+                style={{ color: isActive ? '#FFFFFF' : palette.textPrimary }}
+              >
+                {counts[key]}
+              </span>
+              <span
+                className="text-[9px] uppercase tracking-widest font-semibold mt-1"
+                style={{ color: isActive ? 'rgba(255,255,255,0.85)' : palette.textMuted }}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="space-y-6">
+      {/* Inquiry list */}
+      <div className="space-y-5">
         {filteredInquiries.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-slate-200">
-            <p className="text-xs text-slate-400 uppercase tracking-widest">No inquiries found in this category.</p>
+          <div className="text-center py-16" style={{ border: `1px solid ${palette.border}`, backgroundColor: '#FFFFFF' }}>
+            <p className="text-xs uppercase tracking-widest font-sans" style={{ color: palette.textMuted }}>
+              No inquiries found in this category.
+            </p>
           </div>
         ) : (
-          filteredInquiries.map((inq) => (
-            <div key={inq.id} className="bg-white border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row justify-between gap-6">
-              
-              {/* Inquiry Core Content */}
-              <div className="flex-1 space-y-4">
-                <div className="flex flex-wrap gap-4 items-center">
-                  <span className="text-[8px] bg-slate-100 border text-[#C8A97E] border-[#C8A97E] px-2 py-0.5 uppercase tracking-widest font-semibold font-sans">
-                    {inq.inquiryType}
-                  </span>
-                  
-                  {inq.product && (
-                    <span className="text-[9px] text-slate-400 font-sans uppercase">
-                      Linked Item: <strong>{inq.product.title}</strong>
-                    </span>
-                  )}
-                  
-                  <span className="text-[10px] text-slate-400 font-sans flex items-center gap-1">
-                    <Calendar size={12} />
-                    {new Date(inq.createdAt).toLocaleString()}
-                  </span>
-                </div>
+          filteredInquiries.map((inq) => {
+            const statusConfig = getStatusConfig(inq.status);
+            const statusSelectId = `status-${inq.id}`;
+            const assigneeSelectId = `assignee-${inq.id}`;
 
-                <div className="space-y-1">
-                  <h3 className="text-base font-semibold text-slate-800">{inq.subject}</h3>
-                  <p className="text-xs text-slate-600 font-sans whitespace-pre-wrap bg-slate-50 p-4 border border-slate-100">{inq.message}</p>
-                </div>
+            return (
+              <div
+                key={inq.id}
+                className="relative bg-white p-6 flex flex-col md:flex-row justify-between gap-6"
+                style={{ border: `1px solid ${palette.border}`, boxShadow: '0 1px 2px rgba(17,17,17,0.03)' }}
+              >
+                <div
+                  className="absolute top-0 left-0 h-full w-[3px]"
+                  style={{ backgroundColor: statusConfig.color }}
+                  aria-hidden="true"
+                />
 
-                {/* Contact Card */}
-                <div className="flex flex-wrap gap-6 text-[10px] font-sans text-slate-400 pt-2 border-t border-slate-100/50">
-                  <span className="flex items-center gap-1.5">
-                    <ClipboardList size={12} className="text-[#C8A97E]" />
-                    <span className="font-semibold text-slate-700">{inq.name}</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Mail size={12} className="text-[#C8A97E]" />
-                    <a href={`mailto:${inq.email}`} className="hover:underline">{inq.email}</a>
-                  </span>
-                  {inq.phone && (
-                    <span className="flex items-center gap-1.5">
-                      <Phone size={12} className="text-[#C8A97E]" />
-                      <span>{inq.phone}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Status and Assignment Panel */}
-              <div className="md:w-64 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6 flex flex-col justify-between space-y-4 shrink-0">
-                <div className="space-y-3">
-                  {/* Status update dropdown */}
-                  <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold block">Inquiry Status</label>
-                    <select
-                      value={inq.status}
-                      onChange={(e) => handleUpdateStatus(inq.id, e.target.value)}
-                      className={`w-full px-3 py-1.5 bg-white border uppercase tracking-wider text-[9px] font-semibold focus:outline-none ${
-                        inq.status === 'pending' 
-                          ? 'border-amber-200 text-amber-600 bg-amber-50/20' 
-                          : inq.status === 'resolved'
-                            ? 'border-emerald-200 text-emerald-600 bg-emerald-50/20'
-                            : 'border-slate-200 text-slate-600'
-                      }`}
+                {/* Inquiry core content */}
+                <div className="flex-1 space-y-4 pl-2">
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <span
+                      className="text-[10px] px-2 py-0.5 uppercase tracking-wider font-semibold font-sans"
+                      style={{
+                        backgroundColor: `${palette.navy}14`,
+                        color: palette.navy,
+                        border: `1px solid ${palette.navy}33`,
+                      }}
                     >
-                      <option value="pending">Pending</option>
-                      <option value="in_discussion">In Discussion</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
-                    </select>
+                      {inq.inquiryType}
+                    </span>
+
+                    {inq.product && (
+                      <span className="text-[10px] font-sans uppercase" style={{ color: palette.textMuted }}>
+                        Linked item: <strong style={{ color: palette.textSecondary }}>{inq.product.title}</strong>
+                      </span>
+                    )}
+
+                    <span className="text-[10px] font-sans flex items-center gap-1.5" style={{ color: palette.textMuted }}>
+                      <Calendar size={12} aria-hidden="true" />
+                      {new Date(inq.createdAt).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}{' '}
+                      ·{' '}
+                      {new Date(inq.createdAt).toLocaleTimeString(undefined, {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </span>
                   </div>
 
-                  {/* Assignment dropdown */}
-                  {user?.role === 'admin' && users.length > 0 && (
-                    <div className="space-y-1">
-                      <label className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold block">Assigned Curation Agent</label>
-                      <select
-                        value={inq.assignedTo || ''}
-                        onChange={(e) => handleUpdateAssignee(inq.id, e.target.value || null)}
-                        className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] focus:outline-none"
+                  <div className="space-y-2">
+                    <h3 className="text-base font-semibold" style={{ color: palette.textPrimary }}>
+                      {inq.subject}
+                    </h3>
+                    <p
+                      className="text-xs font-sans whitespace-pre-wrap p-4"
+                      style={{ color: palette.textSecondary, backgroundColor: palette.stone, border: `1px solid ${palette.border}` }}
+                    >
+                      {inq.message}
+                    </p>
+                  </div>
+
+                  {/* Contact line */}
+                  <div
+                    className="flex flex-wrap gap-6 text-[11px] font-sans pt-4"
+                    style={{ color: palette.textMuted, borderTop: `1px solid ${palette.border}` }}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ClipboardList size={13} style={{ color: palette.navy }} aria-hidden="true" />
+                      <span className="font-semibold" style={{ color: palette.textSecondary }}>{inq.name}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Mail size={13} style={{ color: palette.navy }} aria-hidden="true" />
+                      <a
+                        href={`mailto:${inq.email}`}
+                        className="hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        style={{ outlineColor: palette.red }}
                       >
-                        <option value="">Unassigned</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.role})</option>
-                        ))}
+                        {inq.email}
+                      </a>
+                    </span>
+                    {inq.phone && (
+                      <span className="flex items-center gap-1.5">
+                        <Phone size={13} style={{ color: palette.navy }} aria-hidden="true" />
+                        <span>{inq.phone}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status and assignment panel */}
+                <div
+                  className="md:w-64 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-6 flex flex-col justify-between gap-4 shrink-0"
+                  style={{ borderColor: palette.border }}
+                >
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor={statusSelectId}
+                        className="text-[10px] uppercase tracking-widest font-semibold block font-sans"
+                        style={{ color: palette.textMuted }}
+                      >
+                        Inquiry status
+                      </label>
+                      <select
+                        id={statusSelectId}
+                        value={inq.status}
+                        onChange={(e) => handleUpdateStatus(inq.id, e.target.value)}
+                        className="w-full px-3 py-2 uppercase tracking-wider text-[10px] font-semibold font-sans focus-visible:outline-2 focus-visible:outline-offset-2"
+                        style={{
+                          color: statusConfig.color,
+                          backgroundColor: statusConfig.bg,
+                          border: `1px solid ${statusConfig.color}40`,
+                          outlineColor: palette.red,
+                        }}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="in_discussion">In Discussion</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
                       </select>
                     </div>
-                  )}
-                </div>
 
-                <div className="text-right text-[9px] text-slate-400 font-sans">
-                  {inq.assignee ? `Assigned to: ${inq.assignee.firstName} ${inq.assignee.lastName}` : 'Unassigned'}
+                    {user?.role === 'admin' && users.length > 0 && (
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor={assigneeSelectId}
+                          className="text-[10px] uppercase tracking-widest font-semibold block font-sans"
+                          style={{ color: palette.textMuted }}
+                        >
+                          Assigned curation agent
+                        </label>
+                        <select
+                          id={assigneeSelectId}
+                          value={inq.assignedTo || ''}
+                          onChange={(e) => handleUpdateAssignee(inq.id, e.target.value || null)}
+                          className="w-full px-3 py-2 text-[11px] font-sans focus-visible:outline-2 focus-visible:outline-offset-2"
+                          style={{ color: palette.textSecondary, border: `1px solid ${palette.border}`, outlineColor: palette.red }}
+                        >
+                          <option value="">Unassigned</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.firstName} {u.lastName} ({u.role})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-right text-[10px] font-sans" style={{ color: palette.textMuted }}>
+                    {inq.assignee ? `Assigned to: ${inq.assignee.firstName} ${inq.assignee.lastName}` : 'Unassigned'}
+                  </div>
                 </div>
               </div>
-
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
   );
 };
+
 export default ManagerInquiries;

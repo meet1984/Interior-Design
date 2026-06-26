@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../../services/api';
+import { getImageUrl } from '../../services/imageUrl';
 import { Heart, Trash2 } from 'lucide-react';
 
 export const ClientFavorites = () => {
@@ -66,7 +67,7 @@ export const ClientFavorites = () => {
             if (!prod) return null;
             return (
               <div key={fav.id} className="bg-white border border-slate-200/50 shadow-sm flex flex-col group justify-between relative">
-                <button 
+                <button
                   onClick={() => handleRemove(prod.id)}
                   className="absolute top-4 right-4 z-10 w-8 h-8 bg-red-50 hover:bg-red-500 hover:text-white rounded-full flex items-center justify-center text-red-500 transition-colors shadow-sm"
                   title="Remove from favorites"
@@ -75,9 +76,9 @@ export const ClientFavorites = () => {
                 </button>
 
                 <div className="aspect-video relative overflow-hidden bg-slate-100 border-b border-slate-100">
-                  <img 
-                    src={prod.thumbnail.startsWith('/') ? `${import.meta.env.VITE_API_URL}${prod.thumbnail}` : prod.thumbnail} 
-                    alt={prod.title} 
+                  <img
+                    src={getImageUrl(prod.thumbnail)}
+                    alt={prod.title}
                     className="w-full h-full object-cover group-hover:scale-102 transform transition-transform"
                     onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=400"; }}
                   />
@@ -96,8 +97,8 @@ export const ClientFavorites = () => {
                     <span className="font-semibold text-slate-800">
                       €{parseFloat(prod.price).toLocaleString('de-DE')}.00
                     </span>
-                    
-                    <Link 
+
+                    <Link
                       to={`/categories/${prod.category?.slug}/collections/${prod.collection?.slug}`}
                       className="text-[9px] uppercase tracking-widest text-[#C8A97E] hover:underline font-semibold"
                     >

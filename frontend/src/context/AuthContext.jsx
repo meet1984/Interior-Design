@@ -5,7 +5,7 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
+  const [token, setToken] = useState(sessionStorage.getItem('token') || localStorage.getItem('token') || null);
   const [loading, setLoading] = useState(true);
 
   // Verify and fetch profile on load if token exists
@@ -19,7 +19,18 @@ export const AuthProvider = ({ children }) => {
       try {
         const res = await API.get('/auth/profile');
         if (res.data.success) {
-          setUser(res.data.user);
+          const userData = res.data.user;
+          
+          // Strict enforcement: if admin/manager token is in localStorage (e.g. from a previous session before this feature), migrate it out.
+          if (userData.role === 'admin' || userData.role === 'manager') {
+            const localToken = localStorage.getItem('token');
+            if (localToken) {
+              sessionStorage.setItem('token', localToken);
+              localStorage.removeItem('token');
+            }
+          }
+          
+          setUser(userData);
         } else {
           // Token is invalid/expired
           handleLogoutCleanup();
@@ -37,6 +48,7 @@ export const AuthProvider = ({ children }) => {
 
   const handleLogoutCleanup = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
   };
@@ -65,15 +77,23 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await API.post('/auth/login', { email, password, rememberMe });
       if (res.data.success) {
+        if (res.data.requireOtp) {
+          return { success: true, requireOtp: true, email: res.data.email };
+        }
+
         const { token: userToken, user: userData } = res.data;
-        localStorage.setItem('token', userToken);
+        if (userData.role === 'admin' || userData.role === 'manager') {
+          sessionStorage.setItem('token', userToken);
+        } else {
+          localStorage.setItem('token', userToken);
+        }
         setToken(userToken);
         setUser(userData);
         return { success: true, user: userData };
       }
     } catch (err) {
       console.error('Login request failed:', err);
-      throw err.response?.data?.message || 'Invalid username or password';
+      throw err.response?.data?.message || err.message || 'Invalid username or password';
     }
   };
 
@@ -85,7 +105,23 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error('Registration request failed:', err);
-      throw err.response?.data?.message || 'Registration failed';
+      throw err.response?.data?.message || err.message || 'Registration failed';
+    }
+  };
+
+  const verifyLoginOtp = async (email, otp) => {
+    try {
+      const res = await API.post('/auth/verify-login-otp', { email, otp });
+      if (res.data.success) {
+        const { token: userToken, user: userData } = res.data;
+        sessionStorage.setItem('token', userToken);
+        setToken(userToken);
+        setUser(userData);
+        return { success: true, user: userData };
+      }
+    } catch (err) {
+      console.error('Verify login OTP request failed:', err);
+      throw err.response?.data?.message || err.message || 'Invalid OTP';
     }
   };
 
@@ -101,7 +137,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error('OTP verification failed:', err);
-      throw err.response?.data?.message || 'Verification failed';
+      throw err.response?.data?.message || err.message || 'Verification failed';
     }
   };
 
@@ -121,7 +157,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, verifyRegistrationOtp, logout, hasRole, setUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, verifyRegistrationOtp, verifyLoginOtp, logout, hasRole, setUser }}>
       {children}
     </AuthContext.Provider>
   );

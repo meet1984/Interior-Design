@@ -1,0 +1,8 @@
+Options -MultiViews
+RewriteEngine On
+
+# Redirect all requests that are NOT files or directories to index.html
+# This fixes React Router 404s on browser refresh in CPanel/Apache
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [QSA,L]

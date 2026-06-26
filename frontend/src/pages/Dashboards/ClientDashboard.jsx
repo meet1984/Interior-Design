@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../../services/api';
+import { getImageUrl } from '../../services/imageUrl';
 import { Heart, MessageSquare, Clock, Bookmark, HelpCircle } from 'lucide-react';
 
 export const ClientDashboard = () => {
@@ -43,7 +44,7 @@ export const ClientDashboard = () => {
 
       {/* Main grids */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Saved Items */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white border border-slate-200 p-6 shadow-sm">
@@ -70,9 +71,9 @@ export const ClientDashboard = () => {
                   return (
                     <div key={fav.id} className="border border-slate-200 bg-white group flex flex-col justify-between">
                       <div className="aspect-video bg-slate-100 overflow-hidden relative">
-                        <img 
-                          src={prod.thumbnail.startsWith('/') ? `${import.meta.env.VITE_API_URL}${prod.thumbnail}` : prod.thumbnail} 
-                          alt={prod.title} 
+                        <img
+                          src={getImageUrl(prod.thumbnail)}
+                          alt={prod.title}
                           className="w-full h-full object-cover group-hover:scale-105 transform transition-transform"
                           onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=300"; }}
                         />
@@ -80,7 +81,7 @@ export const ClientDashboard = () => {
                       <div className="p-4 space-y-1">
                         <span className="text-[8px] uppercase tracking-wider text-[#C8A97E]">{prod.material?.split(',')[0]}</span>
                         <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-800 truncate">{prod.title}</h4>
-                        <Link 
+                        <Link
                           to={`/categories/${prod.category?.slug}/collections/${prod.collection?.slug}`}
                           className="text-[9px] uppercase tracking-wider text-[#C8A97E] font-semibold block pt-2 hover:underline"
                         >
@@ -119,9 +120,8 @@ export const ClientDashboard = () => {
                       <p className="text-[10px] text-slate-400 mt-1">Submitted: {new Date(inq.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div>
-                      <span className={`px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wider ${
-                        inq.status === 'pending' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                      }`}>
+                      <span className={`px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wider ${inq.status === 'pending' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        }`}>
                         {inq.status.replace('_', ' ')}
                       </span>
                     </div>
@@ -138,14 +138,14 @@ export const ClientDashboard = () => {
           <div className="space-y-6">
             <span className="text-[9px] tracking-widest text-[#C8A97E] uppercase font-semibold">STUDIO ASSISTANCE</span>
             <h3 className="text-lg font-light uppercase tracking-wider text-white">Private Concierge</h3>
-            
+
             <p className="text-xs text-slate-400 font-sans leading-relaxed">
               Your inquiries are monitored directly by our design coordinators. If you wish to expedite a drawing check, please reach out directly:
             </p>
-            
+
             <div className="space-y-2 font-sans text-xs pt-4 text-slate-300">
               <p><strong>Phone:</strong> +49 (89) 123-4567</p>
-              <p><strong>Email:</strong> concierge@signature.com</p>
+              <p><strong>Email:</strong> concierge@klarehomes.com</p>
             </div>
           </div>
 

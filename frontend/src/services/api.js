@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -10,7 +10,7 @@ const API = axios.create({
 // Request Interceptor: Attach JWT Token if available
 API.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,6 +30,7 @@ API.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       // Token expired or invalid — clear it and redirect to login
       localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }

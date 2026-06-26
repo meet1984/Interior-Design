@@ -1,21 +1,249 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import API from '../../services/api';
-import { Plus, Trash2, Image as ImageIcon, AlertCircle, CheckCircle, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, AlertCircle, CheckCircle, X, Loader2, ImageOff } from 'lucide-react';
+import { getImageUrl } from '../../services/imageUrl';
 
+/* ------------------------------------------------------------------ */
+/*  Toast — accessible, auto-roled by type                            */
+/* ------------------------------------------------------------------ */
 const Toast = ({ type, message, onClose }) => {
   if (!message) return null;
   const isError = type === 'error';
   return (
-    <div className={`flex items-start gap-3 p-4 border mb-4 ${
-      isError ? 'bg-red-50 border-red-300 text-red-800' : 'bg-emerald-50 border-emerald-300 text-emerald-800'
-    }`}>
-      {isError ? <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" /> : <CheckCircle size={18} className="text-emerald-500 shrink-0 mt-0.5" />}
-      <p className="text-xs font-sans flex-1 leading-relaxed">{message}</p>
-      <button onClick={onClose} className="text-current opacity-60 hover:opacity-100"><X size={16} /></button>
+    <div
+      role="status"
+      aria-live="polite"
+      className={`flex items-start gap-3 rounded-lg border p-4 mb-6 transition-colors ${
+        isError
+          ? 'bg-red-50 border-red-200 text-red-800'
+          : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+      }`}
+    >
+      {isError ? (
+        <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" aria-hidden="true" />
+      ) : (
+        <CheckCircle size={18} className="text-emerald-500 shrink-0 mt-0.5" aria-hidden="true" />
+      )}
+      <p className="text-sm flex-1 leading-relaxed">{message}</p>
+      <button
+        onClick={onClose}
+        aria-label="Dismiss notification"
+        className="shrink-0 rounded p-0.5 text-current opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-current"
+      >
+        <X size={16} aria-hidden="true" />
+      </button>
     </div>
   );
 };
 
+/* ------------------------------------------------------------------ */
+/*  Gallery tile image with graceful fallback                         */
+/* ------------------------------------------------------------------ */
+const GalleryThumb = ({ src, alt }) => {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-stone-100 text-stone-300">
+        <ImageOff size={28} aria-hidden="true" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Upload modal — focus trap + Escape-to-close                       */
+/* ------------------------------------------------------------------ */
+const UploadModal = ({
+  categories,
+  submitting,
+  dragActive,
+  selectedFile,
+  onClose,
+  onSubmit,
+  onDrag,
+  onDrop,
+  onFileChange,
+}) => {
+  const dialogRef = useRef(null);
+  const firstFieldRef = useRef(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+
+      const focusable = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div
+        className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative z-10 w-full max-w-md rounded-xl border border-stone-200 bg-white p-7 shadow-xl"
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <h3 id={titleId} className="text-base font-semibold text-stone-900">
+            Upload Gallery Image
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="rounded p-1 text-stone-400 hover:text-stone-600 focus:outline-none focus:ring-2 focus:ring-red-200"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4 text-sm">
+          <div className="space-y-1.5">
+            <label htmlFor="title" className="block text-xs font-medium text-stone-500">
+              Title
+            </label>
+            <input
+              ref={firstFieldRef}
+              id="title"
+              type="text"
+              name="title"
+              required
+              placeholder="e.g. Recessed LED channels"
+              className="w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 placeholder:text-stone-400 focus:border-[#C1121F] focus:outline-none focus:ring-1 focus:ring-[#C1121F]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="image" className="block text-xs font-medium text-stone-500">
+                Image File
+              </label>
+              <div
+                className={`relative flex h-24 flex-col items-center justify-center rounded-md border-2 border-dashed text-center transition-colors ${
+                  dragActive
+                    ? 'border-[#C1121F] bg-red-50/50'
+                    : 'border-stone-200 bg-stone-50 hover:bg-stone-100'
+                }`}
+                onDragEnter={onDrag}
+                onDragLeave={onDrag}
+                onDragOver={onDrag}
+                onDrop={onDrop}
+              >
+                <input
+                  id="image"
+                  type="file"
+                  name="image"
+                  accept="image/*"
+                  onChange={onFileChange}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus-visible:ring-2 focus-visible:ring-[#C1121F]"
+                />
+                <ImageIcon size={18} className="mb-1.5 text-stone-400" aria-hidden="true" />
+                {selectedFile ? (
+                  <p className="w-full truncate px-2 text-xs font-medium text-stone-700">
+                    {selectedFile.name}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs font-medium text-stone-500">Drag &amp; drop</p>
+                    <p className="text-[11px] text-stone-400">or click to browse</p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="categoryId" className="block text-xs font-medium text-stone-500">
+                Category
+              </label>
+              <select
+                id="categoryId"
+                name="categoryId"
+                className="h-24 w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 focus:border-[#C1121F] focus:outline-none focus:ring-1 focus:ring-[#C1121F]"
+              >
+                <option value="">None</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="description" className="block text-xs font-medium text-stone-500">
+              Description
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              rows={3}
+              placeholder="Lighting, textures, millwork profiles..."
+              className="w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 placeholder:text-stone-400 focus:border-[#C1121F] focus:outline-none focus:ring-1 focus:ring-[#C1121F]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-stone-100 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-stone-200 px-4 py-2 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex items-center gap-2 rounded-md bg-[#C1121F] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#9B0F18] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-red-200"
+            >
+              {submitting && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+              {submitting ? 'Uploading…' : 'Upload Asset'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Main component                                                     */
+/* ------------------------------------------------------------------ */
 export const AdminGallery = () => {
   const [gallery, setGallery] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -24,8 +252,8 @@ export const AdminGallery = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [toast, setToast] = useState({ type: '', message: '' });
-  
-  // Drag and Drop State
+
+  // Drag and Drop state
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
 
@@ -53,15 +281,16 @@ export const AdminGallery = () => {
   const handleOpenModal = () => {
     setSelectedFile(null);
     setDragActive(false);
+    clearToast();
     setModalOpen(true);
   };
 
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   };
@@ -85,6 +314,7 @@ export const AdminGallery = () => {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    clearToast();
     const formData = new FormData(e.target);
 
     // Append file from state if changed via drag & drop
@@ -118,7 +348,7 @@ export const AdminGallery = () => {
     try {
       const res = await API.delete(`/gallery/${id}`);
       if (res.data.success) {
-        showToast('success', `Gallery item deleted successfully.`);
+        showToast('success', 'Gallery item deleted successfully.');
         fetchData();
       }
     } catch (err) {
@@ -138,158 +368,99 @@ export const AdminGallery = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-[#C8A97E] border-t-transparent border-solid rounded-full animate-spin"></div>
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-stone-300" aria-hidden="true" />
+        <span className="sr-only">Loading gallery…</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 font-display">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-light uppercase tracking-widest text-slate-800">Gallery Curator</h2>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Manage architectural details and design snapshots</p>
+          <h2 className="text-xl font-semibold text-stone-900">Gallery</h2>
+          <p className="mt-0.5 text-sm text-stone-500">
+            Manage architectural details and design snapshots.
+          </p>
         </div>
         <button
           onClick={handleOpenModal}
-          className="btn-gold !py-2 flex items-center gap-2"
+          className="inline-flex items-center justify-center gap-2 self-start rounded-md bg-[#C1121F] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#9B0F18] focus:outline-none focus:ring-2 focus:ring-red-200 sm:self-auto"
         >
-          <Plus size={14} />
-          <span>Upload Image</span>
+          <Plus size={16} aria-hidden="true" />
+          Upload Image
         </button>
       </div>
 
-      {/* Persistent Toast */}
       <Toast type={toast.type} message={toast.message} onClose={clearToast} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {gallery.map((item) => (
-          <div key={item.id} className="bg-white border border-slate-200 shadow-sm flex flex-col group relative aspect-square">
-            <img 
-              src={`${import.meta.env.VITE_API_URL}${item.filePath}`} 
-              alt={item.title} 
-              className="w-full h-full object-cover"
-              onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=400'; }}
-            />
-            
-            <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-4 text-white">
-              <div className="text-right">
-                <button 
-                  onClick={() => handleDelete(item.id, item.title)}
-                  disabled={deletingId === item.id}
-                  className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-none disabled:opacity-50"
-                  title="Delete Gallery item"
-                >
-                  {deletingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                </button>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[8px] uppercase tracking-widest text-[#C8A97E] font-semibold">
-                  {item.category?.name || 'Interior Detail'}
-                </span>
-                <h4 className="text-xs uppercase tracking-wider font-semibold line-clamp-1">{item.title}</h4>
+      {/* Empty state */}
+      {gallery.length === 0 && (
+        <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 py-16 text-center">
+          <p className="text-sm font-medium text-stone-600">No gallery images yet</p>
+          <p className="mt-1 text-sm text-stone-400">
+            Click "Upload Image" to add the first snapshot.
+          </p>
+        </div>
+      )}
+
+      {/* Grid */}
+      <div className="grid grid-cols-2 gap-5 md:grid-cols-3 lg:grid-cols-4">
+        {gallery.map((item) => {
+          const imgSrc = getImageUrl(item.filePath);
+          const isDeleting = deletingId === item.id;
+
+          return (
+            <div
+              key={item.id}
+              className="group relative aspect-square overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+            >
+              <GalleryThumb src={imgSrc} alt={item.title} />
+
+              <div className="absolute inset-0 flex flex-col justify-between bg-stone-900/0 p-3 opacity-0 transition-opacity duration-200 group-hover:bg-stone-900/55 group-hover:opacity-100">
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleDelete(item.id, item.title)}
+                    disabled={isDeleting}
+                    aria-label={`Delete ${item.title}`}
+                    className="rounded-md bg-red-600 p-1.5 text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white"
+                  >
+                    {isDeleting ? (
+                      <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2 size={14} aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+                <div className="space-y-0.5 text-white">
+                  <span className="text-[11px] font-medium text-red-200">
+                    {item.category?.name || 'Interior Detail'}
+                  </span>
+                  <h4 className="line-clamp-1 text-sm font-semibold">{item.title}</h4>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* UPLOAD MODAL */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setModalOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white p-8 border border-slate-100 shadow-2xl z-10 rounded-none">
-            <h3 className="text-lg font-light uppercase tracking-widest text-primary mb-6">Upload Gallery Snapshot</h3>
-
-            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-sans">
-              <div className="space-y-1">
-                <label className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold block">Snapshot Title</label>
-                <input
-                  type="text"
-                  name="title"
-                  required
-                  placeholder="E.g., Recessed LED channels"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#C8A97E]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold block">Image File</label>
-                  <div 
-                    className={`relative border-2 border-dashed p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors h-24 ${
-                      dragActive ? 'border-[#C8A97E] bg-[#C8A97E]/5' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
-                    }`}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                  >
-                    <input
-                      type="file"
-                      name="image"
-                      accept="image/*"
-                      onChange={handleChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                    <ImageIcon size={18} className="text-slate-400 mb-2" />
-                    {selectedFile ? (
-                      <p className="text-[10px] text-primary font-medium truncate w-full px-2">{selectedFile.name}</p>
-                    ) : (
-                      <>
-                        <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Drag & drop</p>
-                        <p className="text-[8px] text-slate-400 mt-0.5">or click to browse</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold block">Link to Category</label>
-                  <select
-                    name="categoryId"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#C8A97E] h-24"
-                  >
-                    <option value="">None</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold block">Description</label>
-                <textarea
-                  name="description"
-                  rows="3"
-                  placeholder="Provide focus details on lighting, textures, millwork profiles..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:outline-none"
-                ></textarea>
-              </div>
-
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 uppercase tracking-widest text-[9px] font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-6 py-2 bg-[#C8A97E] hover:bg-[#AA8753] text-white uppercase tracking-widest text-[9px] font-semibold"
-                >
-                  {submitting ? 'Uploading...' : 'Upload Asset'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <UploadModal
+          categories={categories}
+          submitting={submitting}
+          dragActive={dragActive}
+          selectedFile={selectedFile}
+          onClose={() => setModalOpen(false)}
+          onSubmit={handleFormSubmit}
+          onDrag={handleDrag}
+          onDrop={handleDrop}
+          onFileChange={handleChange}
+        />
       )}
     </div>
   );
 };
+
 export default AdminGallery;
